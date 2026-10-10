@@ -1,0 +1,12 @@
+# 本地工作目录与 Key
+tiles_*/
+*.workdir/
+district_*.json
+.env
+*key*
+!**/scripts/*.py
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store
