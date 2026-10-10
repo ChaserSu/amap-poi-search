@@ -10,6 +10,14 @@
 - 返回高德 `extensions=all` 的完整字段：电话、特色菜标签、人均、评分、营业时间、商圈、官网等
 - 后处理：`type` 拆分为三级业态列，计算每个 POI 到指定项目的 Haversine 直线距离
 
+## 安装到 TRAE
+
+一句话命令安装（全局，TRAE 中国版）：
+
+```bash
+npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
+```
+
 ## 前置条件
 
 1. **高德 API Key**（Web 服务类型）：在[高德开放平台控制台](https://console.amap.com/dev/key/app)创建「Web服务」类型的 Key。免费 Key 即可使用，受每日调用总量与 QPS 限制。
