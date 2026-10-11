@@ -44,6 +44,10 @@ FINAL_FIELDS = ["id", "name", "type_l1", "type_l2", "type_l3", "typecode",
 
 
 # ---------------------------------------------------------------- 通用
+# 全局调用统计（实际发出的 HTTP 请求次数，含重试；缓存命中不计）
+STATS = {"http_calls": 0, "ok": 0, "retry": 0, "t0": time.time()}
+
+
 def die(msg, code=1):
     print(f"错误: {msg}", file=sys.stderr)
     sys.exit(code)
@@ -57,25 +61,37 @@ def get_key(args):
     return key
 
 
-def http_json(url, max_tries=8):
-    """带指数退避的 GET；infocode!=10000 也算可重试错误。"""
+def http_json(url, max_tries=8, tag=""):
+    """带指数退避的 GET；infocode!=10000 也算可重试错误。
+    ② 每条请求实时打印日志：序号/标签/结果/累计耗时。"""
     for attempt in range(max_tries):
+        STATS["http_calls"] += 1
+        n = STATS["http_calls"]
+        print(f"  [请求#{n:>4}] {tag or 'API'} 第{attempt+1}次 ...", flush=True)
         try:
             with urllib.request.urlopen(url, timeout=20) as r:
                 d = json.loads(r.read().decode())
             if str(d.get("infocode")) == "10000":
+                STATS["ok"] += 1
+                npois = len(d.get("pois") or [])
+                extra = f" pois={npois}" if "pois" in d else ""
+                print(f"  [#{n:>4} OK] {tag} 用时{time.time()-STATS['t0']:.0f}s "
+                      f"累计请求{n}{extra}", flush=True)
                 return d
-            info = d.get("info")
-            code = d.get("infocode")
-            # 平台类型不匹配/Key 无效类错误重试无意义，直接返回让上层报错
-            if str(code) in ("10009", "10001", "10003", "10004"):
+            info, code = d.get("info"), d.get("infocode")
+            # 平台类型不匹配/Key 无效/额度耗尽类错误重试无意义
+            if str(code) in ("10009", "10001", "10003", "10004",
+                             "10044", "10020", "10021", "10029", "10019"):
+                print(f"  [#{n} 致命] {info} ({code}) —— 不再重试", file=sys.stderr)
                 return d
+            STATS["retry"] += 1
             wait = min(2 + attempt * 2, 20)
-            print(f"    [接口] {info} ({code})，{wait}s 后重试", file=sys.stderr)
+            print(f"  [#{n} 重试] {info} ({code})，{wait}s 后重试", file=sys.stderr)
             time.sleep(wait)
         except Exception as e:
+            STATS["retry"] += 1
             wait = min(2 + attempt * 2, 20)
-            print(f"    [网络] {e}，{wait}s 后重试", file=sys.stderr)
+            print(f"  [#{n} 网络异常] {e}，{wait}s 后重试", file=sys.stderr)
             time.sleep(wait)
     return None
 
@@ -169,24 +185,24 @@ def api_text_search(key, keywords, city=None, limit=10):
               "citylimit": "true" if city else "false", "offset": limit,
               "page": 1, "extensions": "all", "key": key}
     url = BASE_URL + "/v3/place/text?" + urllib.parse.urlencode(params)
-    return http_json(url)
+    return http_json(url, tag=f"text:{keywords}")
 
 
-def api_polygon_search(key, rect, page, types=""):
+def api_polygon_search(key, rect, page, types="", tag=""):
     xmin, ymin, xmax, ymax = rect
     poly = f"{xmin:.6f},{ymax:.6f}|{xmax:.6f},{ymin:.6f}"  # 左上|右下
     params = {"polygon": poly, "types": types or "",
               "offset": OFFSET, "page": page,
               "extensions": "all", "key": key}
     url = BASE_URL + "/v3/place/polygon?" + urllib.parse.urlencode(params)
-    return http_json(url)
+    return http_json(url, tag=tag or f"polygon p{page}")
 
 
 def api_district(key, adcode):
     params = {"keywords": adcode, "sub_district": 0,
               "extensions": "all", "key": key}
     url = BASE_URL + "/v3/config/district?" + urllib.parse.urlencode(params)
-    return http_json(url)
+    return http_json(url, tag=f"district:{adcode}")
 
 
 def poi_to_raw(p):
@@ -234,8 +250,35 @@ def tile_files(workdir, depth, ix, iy):
     return base + "_leaf.json", base + "_split.json"
 
 
+def page_file(workdir, depth, ix, iy, page):
+    """③ 每页一个缓存文件，拿到响应立即落盘，进程被杀也不丢。"""
+    d = os.path.join(workdir, "pages")
+    return os.path.join(d, f"{depth}_{ix}_{iy}_p{page}.json")
+
+
+def fetch_page(key, workdir, depth, ix, iy, rect, page, types=""):
+    """取单页：优先读页缓存；未命中才发请求，成功后立即写盘。
+    返回 (chunk_raw_list, response_dict)；致命错误/失败返回 (None, d)。"""
+    fp = page_file(workdir, depth, ix, iy, page)
+    if os.path.exists(fp):
+        rec = json.load(open(fp))
+        return rec["pois"], {"_cache": True, "count": rec.get("count", "")}
+    tag = f"d{depth}({ix},{iy}) p{page}"
+    d = api_polygon_search(key, rect, page, types, tag=tag)
+    if d is None or str(d.get("infocode")) != "10000":
+        return None, d
+    chunk = [poi_to_raw(p) for p in (d.get("pois") or [])]
+    os.makedirs(os.path.dirname(fp), exist_ok=True)
+    tmp = fp + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"pois": chunk, "count": sval(d.get("count"))}, f,
+                  ensure_ascii=False)
+    os.replace(tmp, fp)          # 原子落盘
+    return chunk, d
+
+
 def drain_tile(key, workdir, depth, ix, iy, rect, types=""):
-    """返回 (raw_list, truncated)；None 表示彻底失败。命中缓存不发请求。"""
+    """返回 (raw_list, truncated)；None 表示本瓦片未完成（已抓的页都在盘上）。"""
     leaf_fp, split_fp = tile_files(workdir, depth, ix, iy)
     if os.path.exists(split_fp):
         return [], True
@@ -245,13 +288,13 @@ def drain_tile(key, workdir, depth, ix, iy, rect, types=""):
     raw = []
     truncated = False
     for page in range(1, MAX_PAGES + 1):
-        d = api_polygon_search(key, rect, page, types)
-        if d is None or str(d.get("infocode")) != "10000":
-            if d is not None:
-                print(f"    [接口致命] {d.get('info')} ({d.get('infocode')})", file=sys.stderr)
+        chunk, d = fetch_page(key, workdir, depth, ix, iy, rect, page, types)
+        if chunk is None:
+            if d is not None and not d.get("_cache"):
+                print(f"    [接口致命] {d.get('info')} ({d.get('infocode')})",
+                      file=sys.stderr)
             return None
-        chunk = d.get("pois") or []
-        raw.extend(poi_to_raw(p) for p in chunk)
+        raw.extend(chunk)
         if len(chunk) < OFFSET:
             break                          # 末页，已拉干净
         if page == MAX_PAGES:
@@ -265,6 +308,54 @@ def drain_tile(key, workdir, depth, ix, iy, rect, types=""):
         with open(leaf_fp, "w", encoding="utf-8") as f:
             json.dump(raw, f, ensure_ascii=False)
     return raw, truncated
+
+
+def _est_calls(count, depth=0):
+    """均匀密度假设下的请求数估算：满 200 的瓦片需 8 次翻页并四分。"""
+    if depth >= MAX_DEPTH:
+        return math.ceil(min(count, 200) / OFFSET)
+    if count < 200:
+        return max(1, math.ceil(count / OFFSET))
+    return 8 + 4 * _est_calls(count / 4, depth + 1)
+
+
+def estimate_calls(key, workdir, root_rect, types=""):
+    """① 开跑前调用量估算：只探根格第1页，满则再探4个子格第1页（≤5次调用，
+    探测页全部写入页缓存，正式抓取时直接复用，不多花一分钱）。"""
+    os.makedirs(workdir, exist_ok=True)
+    print("[估算] 探测根区域第 1 页（探测结果会被正式抓取复用）...")
+    chunk, d = fetch_page(key, workdir, 0, 0, 0, root_rect, 1, types)
+    if chunk is None:
+        print("[估算] 根区域探测失败，跳过估算直接开始（请关注实时日志）")
+        return
+    root_count = int(sval(d.get("count")) or 0)
+    print(f"[估算] 根区域高德 count={root_count}，第1页返回 {len(chunk)} 条")
+    if root_count < 200 and len(chunk) < OFFSET:
+        est = max(1, math.ceil(root_count / OFFSET))
+        print(f"[估算] 无需分裂，预计请求数 ≈ {est} 次（1 个瓦片翻页）")
+        return
+    # 根格饱和：探 4 个子格第 1 页，拿真实子格 count
+    child_est = 0
+    child_counts = []
+    for (xmin, ymin, xmax, ymax, dx, dy) in split_rect(root_rect):
+        crect = (xmin, ymin, xmax, ymax)
+        cchunk, cd = fetch_page(key, workdir, 1, dx, dy, crect, 1, types)
+        if cchunk is None:
+            child_est = None
+            break
+        cc = int(sval(cd.get("count")) or (200 if len(cchunk) == OFFSET else 0))
+        child_counts.append(cc)
+        child_est += _est_calls(cc)
+    if child_est is None:
+        print(f"[估算] 根区域饱和(count={root_count})，子格探测失败，"
+              f"粗略上限 ≈ {_est_calls(root_count)} 次（均匀密度模型）")
+        return
+    est = child_est + (8 - 1)   # 根格自身 8 页（第1页已付费并缓存）
+    print(f"[估算] 根区域饱和，4 子格 count={child_counts}")
+    print(f"[估算] 预计总请求数 ≈ {est} 次（均匀密度模型，含内部饱和瓦片每片8页的"
+          f"固有成本；实际请以 [请求#N] 日志为准）")
+    print("[估算] 外接矩形四角/区外部分会被拉取后再过滤，估算偏保守。"
+          "若数量不可接受，请 Ctrl+C 后缩小半径/改行政区模式。")
 
 
 def process_stack(key, workdir, stack, keep_test, types=""):
@@ -374,6 +465,7 @@ def cmd_circle(args):
 
     print(f"[圆形模式] 中心=({args.project_lon},{args.project_lat}) "
           f"半径={args.radius}m types={args.types or '(全部)'}")
+    estimate_calls(key, args.workdir, root, args.types)   # ① 先估算（探测页可复用）
     stack = [(0, 0, 0, root)]
     _, failed = process_stack(key, args.workdir, stack, keep_test, args.types)
     failed = retry_failed(key, args.workdir, failed, keep_test, args.types)
@@ -388,6 +480,8 @@ def cmd_circle(args):
                                      float(r["lon"]), float(r["lat"])))
     write_raw_csv(rows, args.raw_out)
     print(f"完成：圆内 {len(rows)} 家 → {args.raw_out}")
+    print(f"本次实际 HTTP 请求 {STATS['http_calls']} 次"
+          f"（成功 {STATS['ok']}，异常重试 {STATS['retry']}；缓存命中不计费）")
 
 
 def load_boundary(key, adcode, workdir):
@@ -424,6 +518,7 @@ def cmd_district(args):
 
     print(f"[行政区模式] {boundary['name']}({boundary['adcode']}) "
           f"边界顶点={sum(len(r) for r in rings)} types={args.types or '(全部)'}")
+    estimate_calls(key, args.workdir, root, args.types)  # ① 先估算（探测页可复用）
     stack = [(0, 0, 0, root)]
     _, failed = process_stack(key, args.workdir, stack, keep_test, args.types)
     failed = retry_failed(key, args.workdir, failed, keep_test, args.types)
@@ -438,6 +533,8 @@ def cmd_district(args):
     kept.sort(key=lambda r: (float(r["lat"]), float(r["lon"])))
     write_raw_csv(kept, args.raw_out)
     print(f"完成：{boundary['name']}境内 {len(kept)} 家 → {args.raw_out}")
+    print(f"本次实际 HTTP 请求 {STATS['http_calls']} 次"
+          f"（成功 {STATS['ok']}，异常重试 {STATS['retry']}；缓存命中不计费）")
 
 
 def cmd_finalize(args):
