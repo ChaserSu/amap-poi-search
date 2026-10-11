@@ -1,5 +1,10 @@
 # amap-poi-search
 
+> **相关项目：[ChaserSu/amap-poi-collector](https://github.com/ChaserSu/amap-poi-collector)**
+> 是本 Skill 的可视化实现，适合直观理解网格切分与抓取过程。但它**仅作为算法原理的展示，只实现了部分功能**。
+> 如有长期使用、新增功能或修复 Bug 的需求，请**以本 Skill 为准**——本仓库结构清晰、可直接被 AI Agent 读取和修改，
+> 直接让 Agent 在本仓库上改代码即可， collector 不作为维护主线。
+
 基于高德地图 Web 服务 API 的 POI 全量抓取技能（Skill）。解决高德搜索接口**单次请求最多返回 200 条**的限制，支持两种搜索模式，输出含三级业态分类与到指定项目直线距离的 CSV。
 
 ## 能力
