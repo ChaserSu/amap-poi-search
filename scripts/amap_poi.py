@@ -30,8 +30,8 @@ OFFSET = 25            # 每页条数（超过 25 可能报错）
 MAX_PAGES = 8          # 同参数翻页硬上限 200 条
 MAX_DEPTH = 12
 EARTH_R = 6371000.0
-# API 域名：默认高德兼容中转 mapapi.cc，可用环境变量 AMAP_BASE 覆盖（如官方 https://restapi.amap.com）
-BASE_URL = os.environ.get("AMAP_BASE", "https://mapapi.cc").rstrip("/")
+# API 域名：优先官方 https://restapi.amap.com；用户显式提供中转站时用环境变量 AMAP_BASE 覆盖
+BASE_URL = os.environ.get("AMAP_BASE", "https://restapi.amap.com").rstrip("/")
 
 RAW_FIELDS = ["id", "name", "type", "typecode", "province", "city", "district",
               "address", "lon", "lat", "distance_m", "tel", "tags", "cost",

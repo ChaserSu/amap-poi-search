@@ -28,10 +28,12 @@ description: 用高德 Web 服务 API 全量抓取指定项目周边或指定行
    - 拿到 Key 后：填入 MCP URL 完成 MCP 配置；同时在本技能中使用
 4. 调用脚本时用 `AMAP_KEY` 环境变量或 `--key` 传入。
    **绝不要把 Key 硬编码进任何文件、不要提交到 Git、日志中注意脱敏。**
-5. **域名与 Key 必须配套**：脚本默认请求高德兼容中转 `https://mapapi.cc`
-   （路径与返回格式同高德，可用环境变量 `AMAP_BASE` 覆盖）。
-   - mapapi.cc 的 Key → 用默认域名即可
-   - 高德官方 Key（含从 MCP URL 解析出的）→ 必须 `export AMAP_BASE=https://restapi.amap.com`
+5. **域名选择（官方优先）**：脚本默认请求高德官方 `https://restapi.amap.com`，
+   可用环境变量 `AMAP_BASE` 覆盖。
+   - 默认：官方域名 + 官方 Key（含从 MCP URL 解析出的 Key），无需额外设置
+   - **仅当用户显式提供自己的中转站域名与配套 Key 时**，才设置
+     `export AMAP_BASE="用户的中转域名"` 并使用中转 Key
+   - 绝不主动建议或默认使用任何第三方中转站；Key 与域名绑定、不可混用
 
 说明：MCP 自身工具默认 `extensions=base` 且无法传参，**拿不到电话**，所以本技能
 绕过 MCP 直接调 REST API。
