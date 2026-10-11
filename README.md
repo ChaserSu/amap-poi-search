@@ -31,6 +31,12 @@ npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
 
 ## 快速开始
 
+
+# 直接向AI大吼「以泰州海陵凤城悦天地为中心，寻找泰州所有的火锅业态」
+
+
+
+
 核心脚本零第三方依赖，仅需 Python 3 标准库：
 
 ```bash
