@@ -29,15 +29,20 @@ npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
    若你有自建或第三方的高德兼容中转站，可设置环境变量 `AMAP_BASE` 指向它（Key 必须与该域名配套）。
 2. （可选）安装高德 MCP。本 Skill 也可以不依赖 MCP，直接用 `curl`/Python 请求 REST API。
 
+
 ## 快速开始
+1. 申请高德的APIkey：[https://console.amap.com/](https://console.amap.com/)，示例密钥：`52a7ce4760db2f79d184`
+2. 安装TRAE：www.trae.cn
+3. 向AI大声吼叫以下内容，安装Skill：
+```bash
+npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
+```
+4. AI会自动调整直到完成安装，完成后，直接向AI大声吼叫：
+```
+拿着我的APIkey「52a7ce4760db2f79d184」，使用高德官方域名，以泰州海陵凤城悦天地为中心，寻找泰州所有的火锅业态
+```
 
-
-# 直接向AI大吼「以泰州海陵凤城悦天地为中心，寻找泰州所有的火锅业态」
-
-
-
-
-核心脚本零第三方依赖，仅需 Python 3 标准库：
+核心脚本零第三方依赖，仅需 Python 3 标准库，如果你想要自己调用的话需要这样输出：
 
 ```bash
 export AMAP_KEY="你的高德Web服务Key"
