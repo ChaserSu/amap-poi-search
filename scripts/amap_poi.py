@@ -30,6 +30,8 @@ OFFSET = 25            # 每页条数（超过 25 可能报错）
 MAX_PAGES = 8          # 同参数翻页硬上限 200 条
 MAX_DEPTH = 12
 EARTH_R = 6371000.0
+# API 域名：默认高德兼容中转 mapapi.cc，可用环境变量 AMAP_BASE 覆盖（如官方 https://restapi.amap.com）
+BASE_URL = os.environ.get("AMAP_BASE", "https://mapapi.cc").rstrip("/")
 
 RAW_FIELDS = ["id", "name", "type", "typecode", "province", "city", "district",
               "address", "lon", "lat", "distance_m", "tel", "tags", "cost",
@@ -166,7 +168,7 @@ def api_text_search(key, keywords, city=None, limit=10):
     params = {"keywords": keywords, "types": "", "city": city or "",
               "citylimit": "true" if city else "false", "offset": limit,
               "page": 1, "extensions": "all", "key": key}
-    url = "https://restapi.amap.com/v3/place/text?" + urllib.parse.urlencode(params)
+    url = BASE_URL + "/v3/place/text?" + urllib.parse.urlencode(params)
     return http_json(url)
 
 
@@ -176,14 +178,14 @@ def api_polygon_search(key, rect, page, types=""):
     params = {"polygon": poly, "types": types or "",
               "offset": OFFSET, "page": page,
               "extensions": "all", "key": key}
-    url = "https://restapi.amap.com/v3/place/polygon?" + urllib.parse.urlencode(params)
+    url = BASE_URL + "/v3/place/polygon?" + urllib.parse.urlencode(params)
     return http_json(url)
 
 
 def api_district(key, adcode):
     params = {"keywords": adcode, "sub_district": 0,
               "extensions": "all", "key": key}
-    url = "https://restapi.amap.com/v3/config/district?" + urllib.parse.urlencode(params)
+    url = BASE_URL + "/v3/config/district?" + urllib.parse.urlencode(params)
     return http_json(url)
 
 

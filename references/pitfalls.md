@@ -118,3 +118,11 @@ Python 随后收到 SIGPIPE 被静默杀死，且管道返回码还是 head 的 
 （外接包围盒 + 不交四分 + 最近点剪枝 + 满页探测，几何上可证）。
 高德自身未收录的店（新开张、未标注）任何 API 方案都拿不到，
 不要向用户承诺"现实世界里一家不缺"。
+
+## 15. 可用高德兼容中转 mapapi.cc 替代官方域名
+
+`https://mapapi.cc` 的路径、参数、返回 JSON 与 `restapi.amap.com` 完全一致，
+实测 `/v3/place/text`（含 tel）与 `/v3/config/district`（含 polyline 边界）均正常，
+可用来节省高德官方配额/费用。但要注意：**Key 与域名绑定，不可混用**——
+中转 Key 只能打中轉域名，高德 Key 打中转域名会鉴权失败；
+脚本通过 `AMAP_BASE` 环境变量切换域名，默认 mapapi.cc。

@@ -20,7 +20,7 @@ npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
 
 ## 前置条件
 
-1. **高德 API Key**（Web 服务类型）：在[高德开放平台控制台](https://console.amap.com/dev/key/app)创建「Web服务」类型的 Key。免费 Key 即可使用，受每日调用总量与 QPS 限制。
+1. **API Key**：默认使用高德兼容中转 `https://mapapi.cc`（接口路径与返回格式与高德完全一致），在该平台获取 Key；也可使用官方[高德开放平台](https://console.amap.com/dev/key/app)的「Web服务」Key，并通过环境变量 `AMAP_BASE=https://restapi.amap.com` 切换域名。
 2. （可选）安装高德 MCP。本 Skill 也可以不依赖 MCP，直接用 `curl`/Python 请求 REST API。
 
 ## 快速开始
@@ -28,7 +28,9 @@ npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
 核心脚本零第三方依赖，仅需 Python 3 标准库：
 
 ```bash
-export AMAP_KEY="你的高德Web服务Key"
+export AMAP_KEY="你的Key"
+# 默认域名 https://mapapi.cc；如用高德官方 Key 再加：
+# export AMAP_BASE="https://restapi.amap.com"
 
 # 1. 定位项目（必须用 POI 文本搜索，不要用地理编码，见 pitfalls #1）
 python3 scripts/amap_poi.py locate --project "凤城悦天地" --city "泰州"
