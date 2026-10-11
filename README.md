@@ -1,3 +1,17 @@
+# 超级快速开始
+
+1. 申请高德的APIkey：[https://console.amap.com/](https://console.amap.com/)，示例密钥：`52a7ce4760db2f79d184`
+2. 安装TRAE：www.trae.cn
+3. 向AI大声吼叫以下内容，安装Skill：
+```bash
+npx skills add ChaserSu/amap-poi-search --agent trae-cn -g -y
+```
+4. AI会自动调整直到完成安装，完成后，直接向AI大声吼叫：
+```
+拿着我的APIkey「52a7ce4760db2f79d184」，使用高德官方域名，以泰州海陵凤城悦天地为中心，寻找泰州所有的火锅业态
+
+
+
 # amap-poi-search
 
 > **相关项目：[ChaserSu/amap-poi-collector](https://github.com/ChaserSu/amap-poi-collector)**
